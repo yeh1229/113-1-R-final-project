@@ -48,19 +48,8 @@ data <- data |>
 
 glimpse(data)
 
-##visualize and pivot
-colnames(data)
-data_long <- data %>%
-  pivot_longer(cols = contains("visitors"), 
-               names_to = "category", 
-               values_to = "visitors")
-glimpse(data_long)
-ggplot(data_long, aes(x = 統計期, y = visitors, color = category)) +
-  geom_line() +
-  labs(title = "各景點參觀人次隨時間變化", x = "統計期", y = "參觀人次", color = "景點") +
-  theme_minimal()
 
-##年度總訪客數表格
+##年度總訪客數表格 #Summarise data
 data_yearly <- data |>
   dplyr::group_by(year) |>
   dplyr::summarize(total_visitors = sum(
@@ -86,7 +75,75 @@ data_yearly <- data |>
 data_yearly
 
 
-##疫情期間與其他年份訪客數比較表格
+##各年分四季參觀人次比較
+# 步驟1：將月份分配到春、夏、秋、冬，並將季節設為有序類別
+data_season_year <- data |>
+  dplyr::mutate(
+    season = dplyr::case_when(
+      month %in% c(3, 4, 5) ~ "春",
+      month %in% c(6, 7, 8) ~ "夏",
+      month %in% c(9, 10, 11) ~ "秋",
+      month %in% c(12, 1, 2) ~ "冬",
+      TRUE ~ NA_character_
+    ),
+    season = factor(season, levels = c("春", "夏", "秋", "冬"))  # 確保季節順序為春、夏、秋、冬
+  )
+
+# 步驟2：使用 pivot_longer 進行資料轉換，將景點類別轉換為長格式
+data_season_year_long <- data_season_year |>
+  tidyr::pivot_longer(
+    cols = matches(".*_visitors$"),
+    names_to = "category",
+    values_to = "visitors"
+  )
+
+# 步驟3：根據年份和季節彙總每個景點的訪客數
+data_season_year_summary <- data_season_year_long |>
+  dplyr::group_by(year, season) |>
+  dplyr::summarize(total_visitors = sum(visitors, na.rm = TRUE), .groups = "drop")
+
+# 步驟4：將結果轉換為寬格式，以便顯示為表格
+data_season_year_table <- data_season_year_summary |>
+  tidyr::pivot_wider(
+    names_from = "season",
+    values_from = "total_visitors"
+  )
+
+# 步驟5：計算每個季節的總和並加到表格的最後
+season_totals <- data_season_year_table |>
+  dplyr::summarize(across(starts_with("春"):starts_with("冬"), \(x) sum(x, na.rm = TRUE))) |>
+  dplyr::mutate(year = "加總")
+
+# 步驟6：將 `data_season_year_table` 中的 `year` 欄位轉換為字符型，並將結果附加到表格中
+data_season_year_table <- data_season_year_table |>
+  dplyr::mutate(year = as.character(year))
+
+# 步驟7：將每個季節的總和附加到原表格
+data_season_year_table_with_totals <- dplyr::bind_rows(data_season_year_table, season_totals)
+
+# 查看結果
+print(data_season_year_table_with_totals)
+
+
+# 步驟8：繪製季節性比較圖，確保季節順序為春、夏、秋、冬
+ggplot(data_season_year_summary, aes(x = season, y = total_visitors, fill = as.factor(year))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "各年份四季參觀人次比較",
+    x = "季節",
+    y = "總參觀人次",
+    fill = "年份"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1), # 旋轉橫軸文字
+    legend.position = "bottom"                        # 圖例移至下方
+  )
+
+
+
+
+##疫情期間與其他年份訪客數比較表格 #Comparison
 data <- data |>
   dplyr::mutate(
     period = dplyr::case_when(
@@ -95,7 +152,7 @@ data <- data |>
       year > 2022 ~ "After COVID-19"
     )
   )
-
+  #Group by summary
 data_period <- data |>
   dplyr::group_by(period) |>
   dplyr::summarize(
@@ -110,6 +167,8 @@ data_period <- data |>
 ggplot(data_period, aes(x = period, y = total_visitors, fill = period)) +
   geom_col() +
   labs(title = "疫情期間與其他年份訪客數比較", x = "時期", y = "總訪客數")
+
+
 
 ##不同場所訪客數在疫情期間的變化表格
 data_location <- data |>
