@@ -236,3 +236,4 @@ ggplot(data_covid_impact_long, aes(x = reorder(category, impact_rate), y = impac
     fill = "變化比較"
   ) +
   theme_minimal()
+
